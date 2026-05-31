@@ -1,32 +1,111 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
-const HINT_MAP = {};
-
-function getHint(word) {
-  const normalized = word.toLowerCase().replace(/[^a-z0-9]/g, "");
-  return HINT_MAP[normalized] || { emoji: "🔎", label: "Hint" };
-}
+const FALLBACK_WORD_SETS = [
+  {
+    id: "beginner",
+    name: "Beginner",
+    words: ["sun", "moon", "star", "tree", "book", "pen", "ball", "car", "house", "water"],
+  },
+  {
+    id: "intermediate",
+    name: "Intermediate",
+    words: ["ability", "access", "achieve", "active", "adjust", "advice", "airport", "analysis", "arrive", "battery"],
+  },
+  {
+    id: "advanced",
+    name: "Advanced",
+    words: ["aberration", "abhorrent", "abjure", "abrogate", "acclivity", "acquiesce", "adjuration", "adumbration", "aesthetic", "amalgamate"],
+  },
+];
 
 function tokenize(text) {
   return text.trim().split(/\s+/).filter(Boolean);
 }
 
+function normalizeWordSetData(raw) {
+  if (!raw || typeof raw !== "object") return [];
+
+  if (Array.isArray(raw)) {
+    return raw
+      .map((item, index) => {
+        if (typeof item === "string") {
+          return { id: `${item}-${index}`, name: item, words: [item] };
+        }
+
+        if (item && typeof item === "object") {
+          const words = Array.isArray(item.words) ? item.words.filter(Boolean) : [];
+          return {
+            id: String(item.id || item.name || `set-${index}`),
+            name: String(item.name || item.id || `Set ${index + 1}`),
+            words,
+          };
+        }
+
+        return null;
+      })
+      .filter(Boolean)
+      .filter((set) => set.words.length > 0);
+  }
+
+  return Object.entries(raw)
+    .map(([key, value]) => ({
+      id: key,
+      name: key.charAt(0).toUpperCase() + key.slice(1),
+      words: Array.isArray(value) ? value.filter(Boolean) : [],
+    }))
+    .filter((set) => set.words.length > 0);
+}
+
 export default function SpeedReadingApp() {
   const [inputText, setInputText] = useState(
-    "Paste text here and press Start. The app will show one word at a time at the speed you choose."
+    "Paste text here or choose a list from the dropdown. The app will show one word at a time at the speed you choose."
   );
   const [wpm, setWpm] = useState(120);
   const [isRunning, setIsRunning] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [words, setWords] = useState([]);
+  const [wordSets, setWordSets] = useState(FALLBACK_WORD_SETS);
+  const [selectedWordSet, setSelectedWordSet] = useState(FALLBACK_WORD_SETS[0]?.id || "beginner");
 
   const timerRef = useRef(null);
 
   const intervalMs = useMemo(() => Math.max(60, Math.round(60000 / wpm)), [wpm]);
   const currentWord = words[currentIndex] || "Ready";
-  const currentHint = getHint(currentWord);
+  const currentWordSetName = wordSets.find((set) => set.id === selectedWordSet)?.name || "Words";
   const progress = words.length ? Math.min(100, Math.round(((currentIndex + 1) / words.length) * 100)) : 0;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadWordSets() {
+      try {
+        const response = await fetch(`${import.meta.env.BASE_URL}words.json`, {
+          cache: "no-store",
+        });
+
+        if (!response.ok) return;
+
+        const data = await response.json();
+        const parsed = normalizeWordSetData(data);
+
+        if (!cancelled && parsed.length) {
+          setWordSets(parsed);
+          setSelectedWordSet(parsed[0].id);
+          setInputText(parsed[0].words.join(" "));
+          setWords(parsed[0].words);
+          setCurrentIndex(0);
+        }
+      } catch {
+        // Keep fallback sets if file is unavailable.
+      }
+    }
+
+    loadWordSets();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!isRunning || words.length === 0) return;
@@ -83,15 +162,43 @@ export default function SpeedReadingApp() {
     if (parsedWords.length === 0) {
       parsedWords = tokenize(inputText);
       setWords(parsedWords);
+      setCurrentIndex(0);
     }
 
     if (parsedWords.length === 0) return;
 
-    if (currentIndex >= parsedWords.length - 1) {
+    if (currentIndex >= parsedWords.length) {
       setCurrentIndex(0);
     }
 
     setIsRunning(true);
+  };
+
+  const resetReading = () => {
+    setIsRunning(false);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    setCurrentIndex(0);
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+  };
+
+  const loadSelectedWordSet = (setId) => {
+    const selected = wordSets.find((item) => item.id === setId);
+    if (!selected) return;
+
+    setSelectedWordSet(setId);
+    setInputText(selected.words.join(" "));
+    setWords(selected.words);
+    setCurrentIndex(0);
+    setIsRunning(false);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
   };
 
   const jumpToWord = (index) => {
@@ -103,18 +210,43 @@ export default function SpeedReadingApp() {
     }
   };
 
+  const toggleVoice = () => {
+    setIsSpeaking((prev) => {
+      const next = !prev;
+      if (!next && typeof window !== "undefined" && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
+      return next;
+    });
+  };
+
+  const feedbackLink = "https://forms.gle/SLmsa3iQWudzZS8j6";
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8">
       <div className="mx-auto max-w-6xl space-y-6">
         <header className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-2xl shadow-black/20">
-          <p className="text-sm uppercase tracking-[0.3em] text-cyan-300">Fun with Speed Reading</p>
-          <p className="mt-3 max-w-2xl text-slate-300">
-            Paste any text, adjust the reading speed, and control playback from the UI.
-          </p>
+          <p className="text-sm uppercase tracking-[0.3em] text-cyan-300">Speed Reading</p>
+            Paste text, choose a word set from the dropdown, adjust the speed, and control playback from the UI.
         </header>
 
         <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
           <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
+            <div className="mb-3 flex items-center justify-between gap-3 flex-wrap">
+              <label className="block text-sm font-medium text-slate-300">Choose word list</label>
+              <select
+                value={selectedWordSet}
+                onChange={(e) => loadSelectedWordSet(e.target.value)}
+                className="rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-100 outline-none focus:border-cyan-400"
+              >
+                {wordSets.map((set) => (
+                  <option key={set.id} value={set.id}>
+                    {set.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             <label className="mb-3 block text-sm font-medium text-slate-300">Paste text</label>
             <textarea
               value={inputText}
@@ -126,19 +258,27 @@ export default function SpeedReadingApp() {
             <div className="mt-5 flex flex-wrap gap-3">
               <button
                 onClick={startOrResumeReading}
-                className={`rounded-2xl px-5 py-3 font-semibold transition ${isRunning
+                className={`rounded-2xl px-5 py-3 font-semibold transition ${
+                  isRunning
                     ? "bg-amber-400 text-slate-950 hover:bg-amber-300"
                     : "bg-cyan-400 text-slate-950 hover:bg-cyan-300"
-                  }`}
+                }`}
               >
                 {isRunning ? "⏸ Pause" : "▶ Start"}
               </button>
               <button
-                onClick={() => setIsSpeaking((prev) => !prev)}
-                className={`rounded-2xl px-5 py-3 font-semibold transition ${isSpeaking
+                onClick={resetReading}
+                className="rounded-2xl border border-slate-700 px-5 py-3 font-semibold text-slate-100 transition hover:bg-slate-800"
+              >
+                ↺ Reset
+              </button>
+              <button
+                onClick={toggleVoice}
+                className={`rounded-2xl px-5 py-3 font-semibold transition ${
+                  isSpeaking
                     ? "bg-emerald-400 text-slate-950 hover:bg-emerald-300"
                     : "border border-slate-700 text-slate-100 hover:bg-slate-800"
-                  }`}
+                }`}
               >
                 {isSpeaking ? "Voice On" : "Voice Off"}
               </button>
@@ -175,14 +315,13 @@ export default function SpeedReadingApp() {
             </section>
 
             <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
-              <p className="text-sm font-medium text-slate-300">Current word</p>
+              <p className="text-sm font-medium text-slate-300">Current word set</p>
               <div className="mt-4 flex min-h-44 items-center justify-center rounded-3xl border border-slate-800 bg-slate-950 p-6 text-center">
                 <div className="space-y-4">
                   <div className="flex flex-col items-center gap-2">
-                    <div className="flex h-20 w-20 items-center justify-center rounded-full border border-slate-700 bg-slate-900 text-4xl shadow-lg">
-                      {currentHint.emoji}
+                    <div className="rounded-full border border-slate-700 bg-slate-900 px-6 py-3 text-sm text-slate-300">
+                      {currentWordSetName}
                     </div>
-                    <p className="text-xs uppercase tracking-[0.25em] text-slate-400">{currentHint.label}</p>
                   </div>
                   <p className="text-4xl md:text-6xl font-bold tracking-wide text-cyan-300">
                     {currentWord}
@@ -198,12 +337,12 @@ export default function SpeedReadingApp() {
               <p className="text-sm font-medium text-slate-300">Status</p>
               <div className="mt-3 rounded-2xl bg-slate-950 p-4 text-sm text-slate-300">
                 {isRunning
-                  ? "Reading in progress. Click Pause, or click any word below to jump there."
+                  ? "Reading in progress. Click Pause, Reset, or click any word below to jump there."
                   : words.length > 0
-                    ? currentIndex >= words.length - 1
-                      ? "Reading completed. Click any word below or press Start to begin again."
-                      : "Paused. Click any word below to jump, then press Start to continue."
-                    : "Paste text and press Start."}
+                  ? currentIndex >= words.length - 1
+                    ? "Reading completed. Click any word below or press Start to begin again."
+                    : "Paused. Click any word below to jump, then press Start to continue."
+                  : "Choose a word list or paste text, then press Start."}
               </div>
             </section>
           </aside>
@@ -226,12 +365,13 @@ export default function SpeedReadingApp() {
                     <button
                       key={`${word}-${index}`}
                       onClick={() => jumpToWord(index)}
-                      className={`rounded-lg px-1.5 py-0.5 transition focus:outline-none focus:ring-2 focus:ring-cyan-400 ${active
+                      className={`rounded-lg px-1.5 py-0.5 transition focus:outline-none focus:ring-2 focus:ring-cyan-400 ${
+                        active
                           ? "bg-cyan-400 text-slate-950 font-bold shadow-lg"
                           : done
-                            ? "text-slate-400 hover:bg-slate-800"
-                            : "text-slate-200 hover:bg-slate-800"
-                        }`}
+                          ? "text-slate-400 hover:bg-slate-800"
+                          : "text-slate-200 hover:bg-slate-800"
+                      }`}
                       title="Jump to this word"
                     >
                       {word}
@@ -242,15 +382,16 @@ export default function SpeedReadingApp() {
             )}
           </div>
         </section>
+
+        <a
+          href={feedbackLink}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="fixed bottom-6 right-6 z-50 rounded-full bg-cyan-400 px-5 py-3 font-semibold text-slate-950 shadow-lg transition hover:bg-cyan-300"
+        >
+          💬 Feedback
+        </a>
       </div>
-      <a
-        href="https://forms.gle/SLmsa3iQWudzZS8j6"
-        target="_blank"
-        rel="noopener noreferrer"
-        className="fixed bottom-6 right-6 z-50 rounded-full bg-cyan-400 px-5 py-3 font-semibold text-slate-950 shadow-lg hover:bg-cyan-300 transition"
-      >
-        💬 Feedback
-      </a>
     </div>
   );
 }
