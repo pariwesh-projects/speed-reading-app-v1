@@ -56,6 +56,50 @@ function normalizeWordSetData(raw) {
     .filter((set) => set.words.length > 0);
 }
 
+function formatTime(totalSeconds) {
+  const safeSeconds = Math.max(0, Math.floor(totalSeconds));
+  const minutes = String(Math.floor(safeSeconds / 60)).padStart(2, "0");
+  const seconds = String(safeSeconds % 60).padStart(2, "0");
+  return `${minutes}:${seconds}`;
+}
+
+function playEndSound() {
+  if (typeof window === "undefined") return;
+
+  const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextCtor) return;
+
+  try {
+    const ctx = new AudioContextCtor();
+    const now = ctx.currentTime;
+
+    const beep = (startOffset, frequency) => {
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(frequency, now + startOffset);
+      gain.gain.setValueAtTime(0.0001, now + startOffset);
+      gain.gain.exponentialRampToValueAtTime(0.18, now + startOffset + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + startOffset + 0.18);
+
+      oscillator.connect(gain);
+      gain.connect(ctx.destination);
+      oscillator.start(now + startOffset);
+      oscillator.stop(now + startOffset + 0.2);
+    };
+
+    beep(0, 880);
+    beep(0.22, 660);
+
+    setTimeout(() => {
+      ctx.close().catch(() => {});
+    }, 800);
+  } catch {
+    // Ignore audio failures silently.
+  }
+}
+
 export default function SpeedReadingApp() {
   const [inputText, setInputText] = useState(
     "Paste text here or choose a list from the dropdown. The app will show one word at a time at the speed you choose."
@@ -67,8 +111,13 @@ export default function SpeedReadingApp() {
   const [words, setWords] = useState([]);
   const [wordSets, setWordSets] = useState(FALLBACK_WORD_SETS);
   const [selectedWordSet, setSelectedWordSet] = useState(FALLBACK_WORD_SETS[0]?.id || "beginner");
+  const [timerMinutes, setTimerMinutes] = useState(5);
+  const [remainingSeconds, setRemainingSeconds] = useState(300);
+  const [timerRunning, setTimerRunning] = useState(false);
+  const [timerDone, setTimerDone] = useState(false);
 
   const timerRef = useRef(null);
+  const countdownRef = useRef(null);
 
   const intervalMs = useMemo(() => Math.max(60, Math.round(60000 / wpm)), [wpm]);
   const currentWord = words[currentIndex] || "Ready";
@@ -148,6 +197,37 @@ export default function SpeedReadingApp() {
     };
   }, [currentWord, isSpeaking]);
 
+  useEffect(() => {
+    if (!timerRunning) return;
+
+    countdownRef.current = setInterval(() => {
+      setRemainingSeconds((prev) => {
+        if (prev <= 1) {
+          clearInterval(countdownRef.current);
+          countdownRef.current = null;
+          setTimerRunning(false);
+          setTimerDone(true);
+          playEndSound();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (countdownRef.current) {
+        clearInterval(countdownRef.current);
+        countdownRef.current = null;
+      }
+    };
+  }, [timerRunning]);
+
+  useEffect(() => {
+    if (!timerRunning) {
+      setRemainingSeconds(timerMinutes * 60);
+    }
+  }, [timerMinutes, timerRunning]);
+
   const startOrResumeReading = () => {
     if (isRunning) {
       setIsRunning(false);
@@ -220,6 +300,24 @@ export default function SpeedReadingApp() {
     });
   };
 
+  const toggleTimer = () => {
+    if (timerRunning) {
+      setTimerRunning(false);
+      if (countdownRef.current) {
+        clearInterval(countdownRef.current);
+        countdownRef.current = null;
+      }
+      return;
+    }
+
+    if (remainingSeconds <= 0) {
+      setRemainingSeconds(timerMinutes * 60);
+    }
+
+    setTimerDone(false);
+    setTimerRunning(true);
+  };
+
   const feedbackLink = "https://forms.gle/SLmsa3iQWudzZS8j6";
 
   return (
@@ -284,70 +382,7 @@ export default function SpeedReadingApp() {
               </button>
             </div>
           </section>
-
-          <aside className="space-y-6">
-            <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
-              <div className="flex items-center justify-between gap-4">
-                <label className="text-sm font-medium text-slate-300">Word speed</label>
-                <span className="rounded-full bg-slate-800 px-3 py-1 text-sm font-semibold text-cyan-300">
-                  {wpm} WPM
-                </span>
-              </div>
-              <input
-                type="range"
-                min="20"
-                max="200"
-                step="5"
-                value={wpm}
-                onChange={(e) => setWpm(Number(e.target.value))}
-                className="mt-4 w-full accent-cyan-400"
-              />
-              <p className="mt-2 text-sm text-slate-400">
-                Current interval: {intervalMs} ms per word
-              </p>
-              <div className="mt-4 h-3 rounded-full bg-slate-800 overflow-hidden">
-                <div
-                  className="h-full rounded-full bg-cyan-400 transition-all"
-                  style={{ width: `${words.length ? progress : 0}%` }}
-                />
-              </div>
-              <p className="mt-2 text-xs text-slate-400">Progress: {progress}%</p>
-            </section>
-
-            <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
-              <p className="text-sm font-medium text-slate-300">Current word set</p>
-              <div className="mt-4 flex min-h-44 items-center justify-center rounded-3xl border border-slate-800 bg-slate-950 p-6 text-center">
-                <div className="space-y-4">
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="rounded-full border border-slate-700 bg-slate-900 px-6 py-3 text-sm text-slate-300">
-                      {currentWordSetName}
-                    </div>
-                  </div>
-                  <p className="text-4xl md:text-6xl font-bold tracking-wide text-cyan-300">
-                    {currentWord}
-                  </p>
-                  <p className="mt-3 text-sm text-slate-400">
-                    Word {words.length === 0 ? 0 : currentIndex + 1} of {words.length || 0}
-                  </p>
-                </div>
-              </div>
-            </section>
-
-            <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
-              <p className="text-sm font-medium text-slate-300">Status</p>
-              <div className="mt-3 rounded-2xl bg-slate-950 p-4 text-sm text-slate-300">
-                {isRunning
-                  ? "Reading in progress. Click Pause, Reset, or click any word below to jump there."
-                  : words.length > 0
-                  ? currentIndex >= words.length - 1
-                    ? "Reading completed. Click any word below or press Start to begin again."
-                    : "Paused. Click any word below to jump, then press Start to continue."
-                  : "Choose a word list or paste text, then press Start."}
-              </div>
-            </section>
-          </aside>
-        </div>
-
+          
         <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <h2 className="text-lg font-semibold text-slate-100">Highlighted text</h2>
@@ -382,6 +417,108 @@ export default function SpeedReadingApp() {
             )}
           </div>
         </section>
+
+<section className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
+              <p className="text-sm font-medium text-slate-300">Current word set</p>
+              <div className="mt-4 flex min-h-44 items-center justify-center rounded-3xl border border-slate-800 bg-slate-950 p-6 text-center">
+                <div className="space-y-4">
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="rounded-full border border-slate-700 bg-slate-900 px-6 py-3 text-sm text-slate-300">
+                      {currentWordSetName}
+                    </div>
+                  </div>
+                  <p className="text-4xl md:text-6xl font-bold tracking-wide text-cyan-300">
+                    {currentWord}
+                  </p>
+                  <p className="mt-3 text-sm text-slate-400">
+                    Word {words.length === 0 ? 0 : currentIndex + 1} of {words.length || 0}
+                  </p>
+                </div>
+              </div>
+            </section>
+          <aside className="space-y-6">
+            <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
+              <div className="flex items-center justify-between gap-4">
+                <label className="text-sm font-medium text-slate-300">Word speed</label>
+                <span className="rounded-full bg-slate-800 px-3 py-1 text-sm font-semibold text-cyan-300">
+                  {wpm} WPM
+                </span>
+              </div>
+              <input
+                type="range"
+                min="20"
+                max="200"
+                step="5"
+                value={wpm}
+                onChange={(e) => setWpm(Number(e.target.value))}
+                className="mt-4 w-full accent-cyan-400"
+              />
+              <p className="mt-2 text-sm text-slate-400">
+                Current interval: {intervalMs} ms per word
+              </p>
+              <div className="mt-4 h-3 rounded-full bg-slate-800 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-cyan-400 transition-all"
+                  style={{ width: `${words.length ? progress : 0}%` }}
+                />
+              </div>
+              <p className="mt-2 text-xs text-slate-400">Progress: {progress}%</p>
+            </section>
+
+            <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
+              <div className="flex items-center justify-between gap-4">
+                <p className="text-sm font-medium text-slate-300">Countdown timer</p>
+                <span className="rounded-full bg-slate-800 px-3 py-1 text-sm font-semibold text-cyan-300">
+                  {formatTime(remainingSeconds)}
+                </span>
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
+                <input
+                  type="number"
+                  min="1"
+                  max="120"
+                  value={timerMinutes}
+                  onChange={(e) => {
+                    const next = Math.max(1, Number(e.target.value) || 1);
+                    setTimerMinutes(next);
+                    if (!timerRunning) {
+                      setRemainingSeconds(next * 60);
+                    }
+                  }}
+                  className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-100 outline-none focus:border-cyan-400"
+                />
+                <button
+                  onClick={toggleTimer}
+                  className={`rounded-2xl px-5 py-3 font-semibold transition ${
+                    timerRunning
+                      ? "bg-amber-400 text-slate-950 hover:bg-amber-300"
+                      : "bg-cyan-400 text-slate-950 hover:bg-cyan-300"
+                  }`}
+                >
+                  {timerRunning ? "Stop Timer" : "Start Timer"}
+                </button>
+              </div>
+              <p className="mt-2 text-xs text-slate-400">
+                {timerDone ? "Timer finished." : "Set minutes, then start the timer. It will play a sound when time is up."}
+              </p>
+            </section>
+
+            
+
+            <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
+              <p className="text-sm font-medium text-slate-300">Status</p>
+              <div className="mt-3 rounded-2xl bg-slate-950 p-4 text-sm text-slate-300">
+                {isRunning
+                  ? "Reading in progress. Click Pause, Reset, or click any word below to jump there."
+                  : words.length > 0
+                  ? currentIndex >= words.length - 1
+                    ? "Reading completed. Click any word below or press Start to begin again."
+                    : "Paused. Click any word below to jump, then press Start to continue."
+                  : "Choose a word list or paste text, then press Start."}
+              </div>
+            </section>
+          </aside>
+        </div>
 
         <a
           href={feedbackLink}
