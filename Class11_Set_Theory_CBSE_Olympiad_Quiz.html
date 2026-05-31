@@ -1,0 +1,94 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Class 11 CBSE Set Theory + Olympiad Practice</title>
+<style>
+body{font-family:Arial,sans-serif;margin:20px;background:#f4f7fb}
+.container{max-width:1000px;margin:auto;background:white;padding:20px;border-radius:10px}
+.question{margin:15px 0;padding:12px;border:1px solid #ddd;border-radius:8px}
+button{padding:10px 15px;margin-top:15px}
+.correct{color:green;font-weight:bold}
+.incorrect{color:red;font-weight:bold}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>Class 11 CBSE Set Theory + Olympiad Interactive Quiz</h1>
+<p>30 Questions covering Sets, Types of Sets, Venn Diagrams, Operations, Cardinality, Power Sets, De Morgan's Laws, and Olympiad Logic.</p>
+<div id="quiz"></div>
+<button onclick="submitQuiz()">Submit Quiz</button>
+<h2 id="score"></h2>
+</div>
+
+<script>
+const questions = [
+["A set is a well-defined collection of?",["Objects","Sentences","Numbers only","Letters only"],0],
+["Which symbol denotes subset?",["⊂","∈","∪","∩"],0],
+["If A={1,2,3}, then 2 ___ A",["∈","⊂","∪","="],0],
+["Empty set is represented by",["{}","{0}","[]","{ } and ∅"],3],
+["Number of subsets of a set with 3 elements",["6","8","9","4"],1],
+["A∪B means",["Common elements","All elements in A or B","Only A","Only B"],1],
+["A∩B means",["Common elements","All elements","Only A","Only B"],0],
+["Universal set contains",["Some elements","No elements","All elements under discussion","Only integers"],2],
+["If n(A)=5, n(B)=4 and A,B disjoint, n(A∪B)=",["9","1","20","5"],0],
+["Power set of {a,b} has",["2","3","4","5"],2],
+["Singleton set contains",["0","1","2","Infinite"],1],
+["Equivalent sets have",["Same elements","Same cardinality","No elements","One element"],1],
+["Which is finite?",["N","{1,2,3}","Z","R"],1],
+["De Morgan: (A∪B)' =",["A'∪B'","A'∩B'","A∩B","A∪B"],1],
+["De Morgan: (A∩B)' =",["A'∪B'","A'∩B'","A∩B","A"],0],
+["If A={1,2}, B={2,3}, then A∩B=",["{1}","{2}","{3}","{}"],1],
+["If A={1,2}, B={2,3}, then A∪B=",["{1,2,3}","{2}","{1}","{3}"],0],
+["n(P(A)) when n(A)=4",["8","16","4","12"],1],
+["Which relation is true?",["A⊂A","A∈A","A=A'","A⊂∅"],0],
+["Set of vowels in English alphabet is",["Finite","Infinite","Empty","Singleton"],0],
+["Olympiad: Number of proper subsets of a 4-element set",["15","16","14","8"],0],
+["Olympiad: If n(A)=10,n(B)=12,n(A∩B)=4, n(A∪B)=",["18","22","26","6"],0],
+["Olympiad: A={multiples of 2}, B={multiples of 4}. Then",["A⊂B","B⊂A","A=B","Disjoint"],1],
+["Olympiad: Number of subsets containing a fixed element in a 5-element set",["16","32","8","10"],0],
+["Olympiad: If A⊂B and n(B)=7, maximum n(A)=",["7","6","5","8"],1],
+["Olympiad: n(U)=40,n(A)=25,n(A')=",["15","65","25","40"],0],
+["Olympiad: A∩B=∅ implies",["Disjoint","Equal","Universal","Subset"],0],
+["Olympiad: Number of elements in power set of empty set",["0","1","2","Undefined"],1],
+["Olympiad: Which is always true?",["A∩A=A","A∪A'=A","A∩A'=A","A⊂A'"],0],
+["Olympiad: n(A×B) if n(A)=3,n(B)=4",["7","12","24","1"],1]
+];
+
+const quiz=document.getElementById("quiz");
+
+questions.forEach((q,i)=>{
+ let div=document.createElement("div");
+ div.className="question";
+ let html=`<p><b>Q${i+1}. ${q[0]}</b></p>`;
+ q[1].forEach((opt,j)=>{
+ html+=`<label><input type="radio" name="q${i}" value="${j}"> ${opt}</label><br>`;
+ });
+ div.innerHTML=html;
+ quiz.appendChild(div);
+});
+
+function submitQuiz(){
+ let score=0;
+ document.querySelectorAll(".result").forEach(e=>e.remove());
+
+ questions.forEach((q,i)=>{
+ let selected=document.querySelector(`input[name=q${i}]:checked`);
+ let res=document.createElement("div");
+ res.className="result";
+ if(selected && Number(selected.value)===q[2]){
+ score++;
+ res.innerHTML='<span class="correct">Correct</span>';
+ }else{
+ res.innerHTML=`<span class="incorrect">Incorrect. Correct answer: ${q[1][q[2]]}</span>`;
+ }
+ document.getElementsByClassName("question")[i].appendChild(res);
+ });
+
+ document.getElementById("score").innerText=`Your Score: ${score}/30`;
+}
+</script>
+</body>
+</html>

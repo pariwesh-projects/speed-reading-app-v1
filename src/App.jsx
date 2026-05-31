@@ -256,11 +256,14 @@ export default function SpeedReadingApp() {
 
   const resetReading = () => {
     setIsRunning(false);
+    setIsSpeaking(false);
+    setInputText("");
+    setWords([]);
+    setCurrentIndex(0);
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
-    setCurrentIndex(0);
     if (typeof window !== "undefined" && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
