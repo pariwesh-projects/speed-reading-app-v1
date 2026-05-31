@@ -7,7 +7,7 @@ A small React demo for speed reading.
 - Adjust speed with a slider
 - Start, pause, and reset playback
 - Shows one word at a time
-- Displays a simple picture-like hint for the current word
+- Displays a simple picture-like hint for the current word.
 
 ## Run locally
 
