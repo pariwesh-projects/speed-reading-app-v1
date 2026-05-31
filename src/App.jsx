@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import MobileNavigation from "./components/MobileNavigation";
 
 const FALLBACK_WORD_SETS = [
   {
@@ -325,6 +326,7 @@ export default function SpeedReadingApp() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8">
+      <MobileNavigation />
       <div className="mx-auto max-w-6xl space-y-6">
         <header className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-2xl shadow-black/20">
           <p className="text-sm uppercase tracking-[0.3em] text-cyan-300">Speed Reading</p>
