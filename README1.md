@@ -28,4 +28,4 @@ npm run build
 5. add timer with end sound and a button to start/stop -Done
 6. add scoring system to encourage child and feel excited
 7. convert picture to text taken from camera
-8. 
+8. add printable worksheets
