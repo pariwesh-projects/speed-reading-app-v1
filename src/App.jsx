@@ -369,6 +369,8 @@ export default function SpeedReadingApp() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8">
+        <SubjectNavigation activeSubject={activeSubject} setActiveSubject={setActiveSubject} />
+        
       <div className="mx-auto max-w-6xl space-y-6">
         <header className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-2xl shadow-black/20">
           <p className="text-sm uppercase tracking-[0.3em] text-cyan-300">Speed Reading</p>
@@ -376,14 +378,6 @@ export default function SpeedReadingApp() {
             Paste text, choose a word set from the dropdown, adjust the speed, and control playback from the UI.
           </p>
         </header>
-
-        <SubjectNavigation activeSubject={activeSubject} setActiveSubject={setActiveSubject} />
-
-        <div className="rounded-3xl border border-slate-800 bg-slate-900/70 px-4 py-3 text-sm text-slate-300 shadow-xl">
-          Current subject: <span className="font-semibold text-cyan-300">{activeSubjectLabel}</span>
-          {subjectLoading ? <span className="ml-2 text-slate-400">Loading content…</span> : null}
-        </div>
-
         <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
           <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
             <div className="mb-3 flex items-center justify-between gap-3 flex-wrap">
