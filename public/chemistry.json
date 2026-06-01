@@ -1,0 +1,5 @@
+{
+  "beginner": ["atom", "molecule", "element", "compound", "acid", "base", "salt", "bond", "mass", "energy"],
+  "intermediate": ["electron", "proton", "neutron", "orbital", "reaction", "catalyst", "equilibrium", "solution", "molarity", "valency"],
+  "advanced": ["stoichiometry", "hybridization", "electronegativity", "thermochemistry", "kinetics", "isomerism", "oxidation", "reduction", "enthalpy", "entropy"]
+}

@@ -1,0 +1,5 @@
+{
+  "beginner": ["read", "write", "speak", "listen", "book", "story", "word", "sentence", "noun", "verb"],
+  "intermediate": ["grammar", "vocabulary", "paragraph", "adjective", "adverb", "pronoun", "comprehension", "communication", "expression", "fluency"],
+  "advanced": ["articulation", "persuasion", "interpretation", "rhetoric", "narrative", "linguistics", "proficiency", "semantics", "synthesis", "analysis"]
+}
