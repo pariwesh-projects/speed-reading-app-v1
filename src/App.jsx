@@ -26,22 +26,10 @@ const FALLBACK_WORD_SETS = [
 ];
 
 const SUBJECTS = {
-  physics: {
-    file: "physics.json",
-    label: "Physics",
-  },
-  chemistry: {
-    file: "chemistry.json",
-    label: "Chemistry",
-  },
-  mathematics: {
-    file: "mathematics.json",
-    label: "Mathematics",
-  },
-  english: {
-    file: "english.json",
-    label: "English",
-  },
+  physics: { file: "physics.json", label: "Physics" },
+  chemistry: { file: "chemistry.json", label: "Chemistry" },
+  mathematics: { file: "mathematics.json", label: "Mathematics" },
+  english: { file: "english.json", label: "English" },
 };
 
 function tokenize(text) {
@@ -50,14 +38,12 @@ function tokenize(text) {
 
 function normalizeWordSetData(raw) {
   if (!raw || typeof raw !== "object") return [];
-
   if (Array.isArray(raw)) {
     return raw
       .map((item, index) => {
         if (typeof item === "string") {
           return { id: `${item}-${index}`, name: item, words: [item] };
         }
-
         if (item && typeof item === "object") {
           const words = Array.isArray(item.words) ? item.words.filter(Boolean) : [];
           return {
@@ -66,13 +52,11 @@ function normalizeWordSetData(raw) {
             words,
           };
         }
-
         return null;
       })
       .filter(Boolean)
       .filter((set) => set.words.length > 0);
   }
-
   return Object.entries(raw)
     .map(([key, value]) => ({
       id: key,
@@ -83,46 +67,39 @@ function normalizeWordSetData(raw) {
 }
 
 function formatTime(totalSeconds) {
-  const safeSeconds = Math.max(0, Math.floor(totalSeconds));
-  const minutes = String(Math.floor(safeSeconds / 60)).padStart(2, "0");
-  const seconds = String(safeSeconds % 60).padStart(2, "0");
+  const safe = Math.max(0, Math.floor(totalSeconds));
+  const minutes = String(Math.floor(safe / 60)).padStart(2, "0");
+  const seconds = String(safe % 60).padStart(2, "0");
   return `${minutes}:${seconds}`;
 }
 
 function playEndSound() {
   if (typeof window === "undefined") return;
-
   const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
   if (!AudioContextCtor) return;
-
   try {
     const ctx = new AudioContextCtor();
     const now = ctx.currentTime;
-
-    const beep = (startOffset, frequency) => {
+    const beep = (offset, frequency) => {
       const oscillator = ctx.createOscillator();
       const gain = ctx.createGain();
-
       oscillator.type = "sine";
-      oscillator.frequency.setValueAtTime(frequency, now + startOffset);
-      gain.gain.setValueAtTime(0.0001, now + startOffset);
-      gain.gain.exponentialRampToValueAtTime(0.18, now + startOffset + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + startOffset + 0.18);
-
+      oscillator.frequency.setValueAtTime(frequency, now + offset);
+      gain.gain.setValueAtTime(0.0001, now + offset);
+      gain.gain.exponentialRampToValueAtTime(0.18, now + offset + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.18);
       oscillator.connect(gain);
       gain.connect(ctx.destination);
-      oscillator.start(now + startOffset);
-      oscillator.stop(now + startOffset + 0.2);
+      oscillator.start(now + offset);
+      oscillator.stop(now + offset + 0.2);
     };
-
     beep(0, 880);
     beep(0.22, 660);
-
     setTimeout(() => {
       ctx.close().catch(() => {});
     }, 800);
   } catch {
-    // Ignore audio failures silently.
+    // ignore
   }
 }
 
@@ -146,7 +123,9 @@ export default function SpeedReadingApp() {
   const [isListening, setIsListening] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(true);
   const [lastSpokenText, setLastSpokenText] = useState("");
-  const [pronunciationFeedback, setPronunciationFeedback] = useState("Press Listen, say the current word, and your score will update.");
+  const [pronunciationFeedback, setPronunciationFeedback] = useState(
+    "Press Listen, say the current word, and your score will update."
+  );
   const [score, setScore] = useState({ correct: 0, attempts: 0 });
 
   const timerRef = useRef(null);
@@ -161,6 +140,7 @@ export default function SpeedReadingApp() {
   const progress = words.length ? Math.min(100, Math.round(((currentIndex + 1) / words.length) * 100)) : 0;
   const activeSubjectLabel = SUBJECTS[activeSubject]?.label || "Subject";
   const scorePercent = score.attempts ? Math.round((score.correct / score.attempts) * 100) : 0;
+  const hasText = inputText.trim().length > 0 || words.length > 0;
 
   useEffect(() => {
     let cancelled = false;
@@ -171,14 +151,8 @@ export default function SpeedReadingApp() {
 
       setSubjectLoading(true);
       try {
-        const response = await fetch(`${import.meta.env.BASE_URL}${subject.file}`, {
-          cache: "no-store",
-        });
-
-        if (!response.ok) {
-          throw new Error(`Unable to load ${subject.file}`);
-        }
-
+        const response = await fetch(`${import.meta.env.BASE_URL}${subject.file}`, { cache: "no-store" });
+        if (!response.ok) throw new Error(`Unable to load ${subject.file}`);
         const data = await response.json();
         const parsed = normalizeWordSetData(data);
 
@@ -203,9 +177,7 @@ export default function SpeedReadingApp() {
           setCurrentIndex(0);
         }
       } finally {
-        if (!cancelled) {
-          setSubjectLoading(false);
-        }
+        if (!cancelled) setSubjectLoading(false);
       }
     }
 
@@ -217,7 +189,6 @@ export default function SpeedReadingApp() {
 
   useEffect(() => {
     if (!isRunning || words.length === 0) return;
-
     timerRef.current = setInterval(() => {
       setCurrentIndex((prev) => {
         if (prev >= words.length - 1) {
@@ -229,7 +200,6 @@ export default function SpeedReadingApp() {
         return prev + 1;
       });
     }, intervalMs);
-
     return () => {
       if (timerRef.current) {
         clearInterval(timerRef.current);
@@ -282,14 +252,11 @@ export default function SpeedReadingApp() {
   }, [timerRunning]);
 
   useEffect(() => {
-    if (!timerRunning) {
-      setRemainingSeconds(timerMinutes * 60);
-    }
+    if (!timerRunning) setRemainingSeconds(timerMinutes * 60);
   }, [timerMinutes, timerRunning]);
 
   useEffect(() => {
     setSpeechSupported(isSpeechRecognitionSupported());
-
     return () => {
       speechRecognizerRef.current?.stop();
     };
@@ -324,7 +291,6 @@ export default function SpeedReadingApp() {
 
   const prepareWordsFromInput = () => {
     if (words.length > 0) return words;
-
     const parsedWords = tokenize(inputText);
     setWords(parsedWords);
     wordsRef.current = parsedWords;
@@ -339,14 +305,9 @@ export default function SpeedReadingApp() {
       stopReadingInterval();
       return;
     }
-
     const parsedWords = prepareWordsFromInput();
     if (parsedWords.length === 0) return;
-
-    if (currentIndex >= parsedWords.length) {
-      setCurrentIndex(0);
-    }
-
+    if (currentIndex >= parsedWords.length) setCurrentIndex(0);
     setIsRunning(true);
   };
 
@@ -367,7 +328,6 @@ export default function SpeedReadingApp() {
   const loadSelectedWordSet = (setId) => {
     const selected = wordSets.find((item) => item.id === setId);
     if (!selected) return;
-
     setSelectedWordSet(setId);
     setInputText(selected.words.join(" "));
     setWords(selected.words);
@@ -404,11 +364,7 @@ export default function SpeedReadingApp() {
       }
       return;
     }
-
-    if (remainingSeconds <= 0) {
-      setRemainingSeconds(timerMinutes * 60);
-    }
-
+    if (remainingSeconds <= 0) setRemainingSeconds(timerMinutes * 60);
     setTimerDone(false);
     setTimerRunning(true);
   };
@@ -457,10 +413,7 @@ export default function SpeedReadingApp() {
         const matched = alternatives.some((item) => isPronunciationMatch(item.transcript, targetWord));
 
         setLastSpokenText(spokenText || "No speech detected");
-        setScore((prev) => ({
-          correct: prev.correct + (matched ? 1 : 0),
-          attempts: prev.attempts + 1,
-        }));
+        setScore((prev) => ({ correct: prev.correct + (matched ? 1 : 0), attempts: prev.attempts + 1 }));
 
         if (matched) {
           setPronunciationFeedback(`Correct: ${targetWord}`);
@@ -497,8 +450,6 @@ export default function SpeedReadingApp() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-8">
-        <SubjectNavigation activeSubject={activeSubject} setActiveSubject={setActiveSubject} />
-        
       <div className="mx-auto max-w-6xl space-y-6">
         <header className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-2xl shadow-black/20">
           <p className="text-sm uppercase tracking-[0.3em] text-cyan-300">Speed Reading</p>
@@ -506,8 +457,20 @@ export default function SpeedReadingApp() {
             Paste text, choose a word set from the dropdown, adjust the speed, and control playback from the UI.
           </p>
         </header>
+
+        <SubjectNavigation activeSubject={activeSubject} setActiveSubject={setActiveSubject} />
+
+        <div className="rounded-3xl border border-slate-800 bg-slate-900/70 px-4 py-3 text-sm text-slate-300 shadow-xl">
+          Current subject: <span className="font-semibold text-cyan-300">{activeSubjectLabel}</span>
+          {subjectLoading ? <span className="ml-2 text-slate-400">Loading content…</span> : null}
+        </div>
+
         <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-          <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
+          <section
+            className={`rounded-3xl border p-5 shadow-xl transition ${
+              hasText ? "border-cyan-400/60 bg-slate-900 ring-1 ring-cyan-400/30" : "border-slate-800 bg-slate-900"
+            }`}
+          >
             <div className="mb-3 flex items-center justify-between gap-3 flex-wrap">
               <label className="block text-sm font-medium text-slate-300">Choose word list</label>
               <select
@@ -524,12 +487,19 @@ export default function SpeedReadingApp() {
             </div>
 
             <label className="mb-3 block text-sm font-medium text-slate-300">Paste text</label>
-            <textarea
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              placeholder="Paste your article, notes, or paragraph here..."
-              className="h-72 w-full rounded-2xl border border-slate-700 bg-slate-950 p-4 text-base leading-7 text-slate-100 outline-none placeholder:text-slate-500 focus:border-cyan-400"
-            />
+            <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4 transition focus-within:border-cyan-400 focus-within:ring-2 focus-within:ring-cyan-400/30">
+              <textarea
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                placeholder="Paste your article, notes, or paragraph here..."
+                className="h-72 w-full rounded-2xl border-0 bg-transparent p-0 text-base leading-7 text-slate-100 outline-none placeholder:text-slate-500"
+              />
+              <p className="mt-3 text-xs text-slate-400">
+                {words.length > 0
+                  ? `Loaded ${words.length} words. The panel is highlighted while content is present.`
+                  : "Paste or load text to highlight this panel."}
+              </p>
+            </div>
 
             <div className="mt-5 flex flex-wrap gap-3">
               <button
@@ -561,59 +531,24 @@ export default function SpeedReadingApp() {
             </div>
           </section>
 
-          <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
-            <div className="flex items-center justify-between gap-4 flex-wrap">
-              <h2 className="text-lg font-semibold text-slate-100">Highlighted text</h2>
-              <p className="text-sm text-slate-400">Click any word to jump to it</p>
-            </div>
-            <div className="mt-4 max-h-[26rem] overflow-auto rounded-2xl border border-slate-800 bg-slate-950 p-4 leading-8 text-base">
-              {words.length === 0 ? (
-                <p className="text-slate-500">Your pasted text will appear here with the current word highlighted.</p>
-              ) : (
-                <div className="flex flex-wrap gap-x-2 gap-y-3">
-                  {words.map((word, index) => {
-                    const active = index === currentIndex;
-                    const done = index < currentIndex;
-                    return (
-                      <button
-                        key={`${word}-${index}`}
-                        onClick={() => jumpToWord(index)}
-                        className={`rounded-lg px-1.5 py-0.5 transition focus:outline-none focus:ring-2 focus:ring-cyan-400 ${
-                          active
-                            ? "bg-cyan-400 text-slate-950 font-bold shadow-lg"
-                            : done
-                            ? "text-slate-400 hover:bg-slate-800"
-                            : "text-slate-200 hover:bg-slate-800"
-                        }`}
-                        title="Jump to this word"
-                      >
-                        {word}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </section>
-
-          <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
-            <p className="text-sm font-medium text-slate-300">Current word set</p>
-            <div className="mt-4 flex min-h-44 items-center justify-center rounded-3xl border border-slate-800 bg-slate-950 p-6 text-center">
-              <div className="space-y-4">
-                <div className="flex flex-col items-center gap-2">
-                  <div className="rounded-full border border-slate-700 bg-slate-900 px-6 py-3 text-sm text-slate-300">
-                    {currentWordSetName}
-                  </div>
-                </div>
-                <p className="text-4xl md:text-6xl font-bold tracking-wide text-cyan-300">{currentWord}</p>
-                <p className="mt-3 text-sm text-slate-400">
-                  Word {words.length === 0 ? 0 : currentIndex + 1} of {words.length || 0}
-                </p>
-              </div>
-            </div>
-          </section>
-
           <aside className="space-y-6">
+            <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
+              <p className="text-sm font-medium text-slate-300">Current word set</p>
+              <div className="mt-4 flex min-h-44 items-center justify-center rounded-3xl border border-slate-800 bg-slate-950 p-6 text-center">
+                <div className="space-y-4">
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="rounded-full border border-slate-700 bg-slate-900 px-6 py-3 text-sm text-slate-300">
+                      {currentWordSetName}
+                    </div>
+                  </div>
+                  <p className="text-4xl font-bold tracking-wide text-cyan-300 md:text-6xl">{currentWord}</p>
+                  <p className="mt-3 text-sm text-slate-400">
+                    Word {words.length === 0 ? 0 : currentIndex + 1} of {words.length || 0}
+                  </p>
+                </div>
+              </div>
+            </section>
+
             <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
               <div className="flex items-center justify-between gap-4">
                 <p className="text-sm font-medium text-slate-300">Pronunciation score</p>
@@ -689,9 +624,7 @@ export default function SpeedReadingApp() {
                   onChange={(e) => {
                     const next = Math.max(1, Number(e.target.value) || 1);
                     setTimerMinutes(next);
-                    if (!timerRunning) {
-                      setRemainingSeconds(next * 60);
-                    }
+                    if (!timerRunning) setRemainingSeconds(next * 60);
                   }}
                   className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-sm text-slate-100 outline-none focus:border-cyan-400"
                 />
@@ -715,11 +648,11 @@ export default function SpeedReadingApp() {
               <p className="text-sm font-medium text-slate-300">Status</p>
               <div className="mt-3 rounded-2xl bg-slate-950 p-4 text-sm text-slate-300">
                 {isRunning
-                  ? "Reading in progress. Click Pause, Reset, or click any word below to jump there."
+                  ? "Reading in progress. Click Pause, Reset, or adjust the speed as needed."
                   : words.length > 0
                   ? currentIndex >= words.length - 1
-                    ? "Reading completed. Click any word below or press Start to begin again."
-                    : "Paused. Click any word below to jump, then press Start to continue."
+                    ? "Reading completed. Press Start to begin again."
+                    : "Paused. Adjust the text and press Start to continue."
                   : "Choose a word list or paste text, then press Start."}
               </div>
             </section>
