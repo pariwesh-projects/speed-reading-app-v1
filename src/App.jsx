@@ -1,5 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import SubjectNavigation from "./components/SubjectNavigation";
+import {
+  createContinuousSpeechRecognizer,
+  getRecognitionErrorMessage,
+  isPronunciationMatch,
+  isSpeechRecognitionSupported,
+} from "./speechRecognition";
 
 const FALLBACK_WORD_SETS = [
   {
@@ -137,15 +143,24 @@ export default function SpeedReadingApp() {
   const [timerDone, setTimerDone] = useState(false);
   const [activeSubject, setActiveSubject] = useState("physics");
   const [subjectLoading, setSubjectLoading] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(true);
+  const [lastSpokenText, setLastSpokenText] = useState("");
+  const [pronunciationFeedback, setPronunciationFeedback] = useState("Press Listen, say the current word, and your score will update.");
+  const [score, setScore] = useState({ correct: 0, attempts: 0 });
 
   const timerRef = useRef(null);
   const countdownRef = useRef(null);
+  const speechRecognizerRef = useRef(null);
+  const wordsRef = useRef([]);
+  const currentIndexRef = useRef(0);
 
   const intervalMs = useMemo(() => Math.max(60, Math.round(60000 / wpm)), [wpm]);
   const currentWord = words[currentIndex] || "Ready";
   const currentWordSetName = wordSets.find((set) => set.id === selectedWordSet)?.name || "Words";
   const progress = words.length ? Math.min(100, Math.round(((currentIndex + 1) / words.length) * 100)) : 0;
   const activeSubjectLabel = SUBJECTS[activeSubject]?.label || "Subject";
+  const scorePercent = score.attempts ? Math.round((score.correct / score.attempts) * 100) : 0;
 
   useEffect(() => {
     let cancelled = false;
@@ -272,23 +287,60 @@ export default function SpeedReadingApp() {
     }
   }, [timerMinutes, timerRunning]);
 
+  useEffect(() => {
+    setSpeechSupported(isSpeechRecognitionSupported());
+
+    return () => {
+      speechRecognizerRef.current?.stop();
+    };
+  }, []);
+
+  useEffect(() => {
+    wordsRef.current = words;
+  }, [words]);
+
+  useEffect(() => {
+    currentIndexRef.current = currentIndex;
+  }, [currentIndex]);
+
+  const stopReadingInterval = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  };
+
+  const stopListening = () => {
+    speechRecognizerRef.current?.stop();
+    speechRecognizerRef.current = null;
+    setIsListening(false);
+  };
+
+  const resetPracticeScore = () => {
+    setScore({ correct: 0, attempts: 0 });
+    setLastSpokenText("");
+    setPronunciationFeedback("Press Listen, say the current word, and your score will update.");
+  };
+
+  const prepareWordsFromInput = () => {
+    if (words.length > 0) return words;
+
+    const parsedWords = tokenize(inputText);
+    setWords(parsedWords);
+    wordsRef.current = parsedWords;
+    setCurrentIndex(0);
+    currentIndexRef.current = 0;
+    return parsedWords;
+  };
+
   const startOrResumeReading = () => {
     if (isRunning) {
       setIsRunning(false);
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
+      stopReadingInterval();
       return;
     }
 
-    let parsedWords = words;
-    if (parsedWords.length === 0) {
-      parsedWords = tokenize(inputText);
-      setWords(parsedWords);
-      setCurrentIndex(0);
-    }
-
+    const parsedWords = prepareWordsFromInput();
     if (parsedWords.length === 0) return;
 
     if (currentIndex >= parsedWords.length) {
@@ -304,10 +356,9 @@ export default function SpeedReadingApp() {
     setInputText("");
     setWords([]);
     setCurrentIndex(0);
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
+    stopReadingInterval();
+    stopListening();
+    resetPracticeScore();
     if (typeof window !== "undefined" && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
@@ -322,19 +373,16 @@ export default function SpeedReadingApp() {
     setWords(selected.words);
     setCurrentIndex(0);
     setIsRunning(false);
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
+    stopReadingInterval();
+    stopListening();
+    resetPracticeScore();
   };
 
   const jumpToWord = (index) => {
     setCurrentIndex(index);
     setIsRunning(false);
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
+    stopReadingInterval();
+    stopListening();
   };
 
   const toggleVoice = () => {
@@ -363,6 +411,86 @@ export default function SpeedReadingApp() {
 
     setTimerDone(false);
     setTimerRunning(true);
+  };
+
+  const listenForPronunciation = () => {
+    if (isListening) {
+      stopListening();
+      setPronunciationFeedback("Listening stopped.");
+      return;
+    }
+
+    const activeWords = prepareWordsFromInput();
+    if (activeWords.length === 0) {
+      setPronunciationFeedback("Choose a word list or paste text before practicing.");
+      return;
+    }
+
+    if (!isSpeechRecognitionSupported()) {
+      setSpeechSupported(false);
+      setPronunciationFeedback("Speech recognition is not supported in this browser. Try Chrome or Edge on localhost.");
+      return;
+    }
+
+    setIsSpeaking(false);
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+
+    const getTargetWord = () => wordsRef.current[currentIndexRef.current] || currentWord;
+
+    speechRecognizerRef.current = createContinuousSpeechRecognizer({
+      onStart: () => {
+        setIsListening(true);
+        setPronunciationFeedback(`Listening for "${getTargetWord()}"...`);
+      },
+      onAudioStart: () => {
+        setPronunciationFeedback(`Microphone is active. Say "${getTargetWord()}".`);
+      },
+      onSpeechStart: () => {
+        setPronunciationFeedback("Speech detected...");
+      },
+      onResult: (alternatives) => {
+        const targetWord = getTargetWord();
+        const activeWordsNow = wordsRef.current;
+        const spokenText = alternatives.map((item) => item.transcript).join(" ").trim();
+        const matched = alternatives.some((item) => isPronunciationMatch(item.transcript, targetWord));
+
+        setLastSpokenText(spokenText || "No speech detected");
+        setScore((prev) => ({
+          correct: prev.correct + (matched ? 1 : 0),
+          attempts: prev.attempts + 1,
+        }));
+
+        if (matched) {
+          setPronunciationFeedback(`Correct: ${targetWord}`);
+          setCurrentIndex((prev) => {
+            const next = prev < activeWordsNow.length - 1 ? prev + 1 : prev;
+            currentIndexRef.current = next;
+            return next;
+          });
+        } else {
+          setPronunciationFeedback(`Try again: expected "${targetWord}".`);
+        }
+      },
+      onError: (error) => {
+        setPronunciationFeedback(getRecognitionErrorMessage(error));
+        if (["audio-capture", "network", "not-allowed", "service-not-allowed"].includes(error)) {
+          setIsListening(false);
+          speechRecognizerRef.current = null;
+        }
+      },
+      onNoMatch: () => {
+        setLastSpokenText("No clear match");
+        setPronunciationFeedback(`I heard speech, but could not match "${getTargetWord()}". Try again.`);
+      },
+      onEnd: () => {
+        speechRecognizerRef.current = null;
+        setIsListening(false);
+      },
+    });
+
+    speechRecognizerRef.current?.start();
   };
 
   const feedbackLink = "https://forms.gle/SLmsa3iQWudzZS8j6";
@@ -486,6 +614,39 @@ export default function SpeedReadingApp() {
           </section>
 
           <aside className="space-y-6">
+            <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
+              <div className="flex items-center justify-between gap-4">
+                <p className="text-sm font-medium text-slate-300">Pronunciation score</p>
+                <span className="rounded-full bg-slate-800 px-3 py-1 text-sm font-semibold text-cyan-300">
+                  {score.correct}/{score.attempts}
+                </span>
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <button
+                  onClick={listenForPronunciation}
+                  disabled={!speechSupported}
+                  className={`rounded-2xl px-5 py-3 font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                    isListening
+                      ? "bg-amber-400 text-slate-950 hover:bg-amber-300"
+                      : "bg-emerald-400 text-slate-950 hover:bg-emerald-300"
+                  }`}
+                >
+                  {isListening ? "Stop Listening" : "Listen"}
+                </button>
+                <button
+                  onClick={resetPracticeScore}
+                  className="rounded-2xl border border-slate-700 px-5 py-3 font-semibold text-slate-100 transition hover:bg-slate-800"
+                >
+                  Reset Score
+                </button>
+              </div>
+              <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-800">
+                <div className="h-full rounded-full bg-emerald-400 transition-all" style={{ width: `${scorePercent}%` }} />
+              </div>
+              <p className="mt-3 text-sm text-slate-300">{pronunciationFeedback}</p>
+              <p className="mt-2 text-xs text-slate-500">Heard: {lastSpokenText || "Nothing yet"}</p>
+            </section>
+
             <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
               <div className="flex items-center justify-between gap-4">
                 <label className="text-sm font-medium text-slate-300">Word speed</label>

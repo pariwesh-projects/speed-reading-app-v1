@@ -29,3 +29,4 @@ npm run build
 6. add scoring system to encourage child and feel excited
 7. convert picture to text taken from camera
 8. add printable worksheets
+9. User can pronounce words. -done
