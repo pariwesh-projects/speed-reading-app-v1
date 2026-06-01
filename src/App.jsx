@@ -127,13 +127,14 @@ export default function SpeedReadingApp() {
     "Press Listen, say the current word, and your score will update."
   );
   const [score, setScore] = useState({ correct: 0, attempts: 0 });
-  const [selectedWordIndex, setSelectedWordIndex] = useState(-1);
 
   const timerRef = useRef(null);
   const countdownRef = useRef(null);
   const speechRecognizerRef = useRef(null);
   const wordsRef = useRef([]);
   const currentIndexRef = useRef(0);
+  const previewScrollRef = useRef(null);
+  const previewItemRefs = useRef([]);
 
   const intervalMs = useMemo(() => Math.max(60, Math.round(60000 / wpm)), [wpm]);
   const currentWord = words[currentIndex] || "Ready";
@@ -163,7 +164,8 @@ export default function SpeedReadingApp() {
           setInputText(parsed[0].words.join(" "));
           setWords(parsed[0].words);
           setCurrentIndex(0);
-          setSelectedWordIndex(0);
+          currentIndexRef.current = 0;
+          wordsRef.current = parsed[0].words;
           setIsRunning(false);
           if (timerRef.current) {
             clearInterval(timerRef.current);
@@ -177,7 +179,8 @@ export default function SpeedReadingApp() {
           setInputText(FALLBACK_WORD_SETS[0].words.join(" "));
           setWords(FALLBACK_WORD_SETS[0].words);
           setCurrentIndex(0);
-          setSelectedWordIndex(0);
+          currentIndexRef.current = 0;
+          wordsRef.current = FALLBACK_WORD_SETS[0].words;
         }
       } finally {
         if (!cancelled) setSubjectLoading(false);
@@ -274,10 +277,16 @@ export default function SpeedReadingApp() {
   }, [currentIndex]);
 
   useEffect(() => {
-    if (currentIndex >= 0 && currentIndex < words.length) {
-      setSelectedWordIndex(currentIndex);
-    } else if (words.length === 0) {
-      setSelectedWordIndex(-1);
+    const activePreviewItem = previewItemRefs.current[currentIndex];
+    const previewContainer = previewScrollRef.current;
+    if (!activePreviewItem || !previewContainer || words.length === 0) return;
+
+    const containerRect = previewContainer.getBoundingClientRect();
+    const itemRect = activePreviewItem.getBoundingClientRect();
+    const isVisible = itemRect.top >= containerRect.top && itemRect.bottom <= containerRect.bottom;
+
+    if (!isVisible) {
+      activePreviewItem.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
     }
   }, [currentIndex, words.length]);
 
@@ -319,7 +328,6 @@ export default function SpeedReadingApp() {
     wordsRef.current = parsedWords;
     setCurrentIndex(0);
     currentIndexRef.current = 0;
-    setSelectedWordIndex(parsedWords.length > 0 ? 0 : -1);
   };
 
   const prepareWordsFromInput = () => {
@@ -329,11 +337,10 @@ export default function SpeedReadingApp() {
     wordsRef.current = parsedWords;
     setCurrentIndex(0);
     currentIndexRef.current = 0;
-    setSelectedWordIndex(-1);
     return parsedWords;
   };
 
-  const startOrResumeReading = () => {
+  const toggleReading = () => {
     if (isRunning) {
       setIsRunning(false);
       stopReadingInterval();
@@ -346,27 +353,19 @@ export default function SpeedReadingApp() {
     setWords(parsedWords);
     wordsRef.current = parsedWords;
 
-    if (currentIndex >= parsedWords.length) {
-      setCurrentIndex(0);
-      currentIndexRef.current = 0;
-      setSelectedWordIndex(0);
-    } else {
-      setSelectedWordIndex(currentIndex);
-    }
-
+    const nextIndex = currentIndex >= parsedWords.length ? 0 : currentIndex;
+    setCurrentIndex(nextIndex);
+    currentIndexRef.current = nextIndex;
     setIsRunning(true);
   };
 
-  const resetReading = () => {
+  const restartReading = () => {
     setIsRunning(false);
-    setIsSpeaking(false);
-    setInputText("");
-    setWords([]);
-    setCurrentIndex(0);
-    setSelectedWordIndex(-1);
     stopReadingInterval();
+    setCurrentIndex(0);
+    currentIndexRef.current = 0;
+    setIsSpeaking(false);
     stopListening();
-    resetPracticeScore();
     if (typeof window !== "undefined" && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
@@ -378,8 +377,9 @@ export default function SpeedReadingApp() {
     setSelectedWordSet(setId);
     setInputText(selected.words.join(" "));
     setWords(selected.words);
+    wordsRef.current = selected.words;
     setCurrentIndex(0);
-    setSelectedWordIndex(0);
+    currentIndexRef.current = 0;
     setIsRunning(false);
     stopReadingInterval();
     stopListening();
@@ -388,7 +388,7 @@ export default function SpeedReadingApp() {
 
   const jumpToWord = (index) => {
     setCurrentIndex(index);
-    setSelectedWordIndex(index);
+    currentIndexRef.current = index;
     setIsRunning(false);
     stopReadingInterval();
     stopListening();
@@ -555,11 +555,14 @@ export default function SpeedReadingApp() {
                   : "Paste or load text to highlight this panel."}
               </p>
 
-              <div className="mt-4 max-h-44 overflow-auto rounded-2xl border border-slate-800 bg-slate-950 p-3">
+              <div
+                ref={previewScrollRef}
+                className="mt-4 max-h-44 overflow-auto rounded-2xl border border-slate-800 bg-slate-950 p-3"
+              >
                 <div className="flex flex-wrap gap-2">
                   {words.length > 0 ? (
                     words.map((word, index) => {
-                      const isSelected = index === selectedWordIndex;
+                      const isSelected = index === currentIndex;
                       return (
                         <button
                           key={`preview-${word}-${index}`}
@@ -568,7 +571,6 @@ export default function SpeedReadingApp() {
                           }}
                           type="button"
                           onClick={() => {
-                            setSelectedWordIndex(index);
                             jumpToWord(index);
                             speakWord(word);
                           }}
@@ -592,7 +594,7 @@ export default function SpeedReadingApp() {
 
             <div className="mt-5 flex flex-wrap gap-3">
               <button
-                onClick={startOrResumeReading}
+                onClick={toggleReading}
                 className={`rounded-2xl px-5 py-3 font-semibold transition ${
                   isRunning
                     ? "bg-amber-400 text-slate-950 hover:bg-amber-300"
@@ -602,10 +604,10 @@ export default function SpeedReadingApp() {
                 {isRunning ? "⏸ Pause" : "▶ Start"}
               </button>
               <button
-                onClick={resetReading}
+                onClick={restartReading}
                 className="rounded-2xl border border-slate-700 px-5 py-3 font-semibold text-slate-100 transition hover:bg-slate-800"
               >
-                ↺ Reset
+                ↺ Restart
               </button>
               <button
                 onClick={toggleVoice}
@@ -737,10 +739,10 @@ export default function SpeedReadingApp() {
               <p className="text-sm font-medium text-slate-300">Status</p>
               <div className="mt-3 rounded-2xl bg-slate-950 p-4 text-sm text-slate-300">
                 {isRunning
-                  ? "Reading in progress. Click Pause, Reset, or adjust the speed as needed."
+                  ? "Reading in progress. Click Pause, Restart, or adjust the speed as needed."
                   : words.length > 0
                   ? currentIndex >= words.length - 1
-                    ? "Reading completed. Press Start to begin again."
+                    ? "Reading completed. Press Start to begin again or Restart to return to the start."
                     : "Paused. Adjust the text and press Start to continue."
                   : "Choose a word list or paste text, then press Start."}
               </div>
