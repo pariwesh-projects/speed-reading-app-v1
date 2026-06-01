@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import SubjectNavigation from "./components/SubjectNavigation";
 
 const FALLBACK_WORD_SETS = [
   {
@@ -115,6 +116,7 @@ export default function SpeedReadingApp() {
   const [remainingSeconds, setRemainingSeconds] = useState(300);
   const [timerRunning, setTimerRunning] = useState(false);
   const [timerDone, setTimerDone] = useState(false);
+  const [activeSubject, setActiveSubject] = useState("physics");
 
   const timerRef = useRef(null);
   const countdownRef = useRef(null);
@@ -328,8 +330,15 @@ export default function SpeedReadingApp() {
       <div className="mx-auto max-w-6xl space-y-6">
         <header className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-2xl shadow-black/20">
           <p className="text-sm uppercase tracking-[0.3em] text-cyan-300">Speed Reading</p>
+          <p className="mt-2 text-sm text-slate-300">
             Paste text, choose a word set from the dropdown, adjust the speed, and control playback from the UI.
+          </p>
         </header>
+
+        <SubjectNavigation
+          activeSubject={activeSubject}
+          setActiveSubject={setActiveSubject}
+        />
 
         <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
           <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
