@@ -19,6 +19,25 @@ const FALLBACK_WORD_SETS = [
   },
 ];
 
+const SUBJECTS = {
+  physics: {
+    file: "physics.json",
+    label: "Physics",
+  },
+  chemistry: {
+    file: "chemistry.json",
+    label: "Chemistry",
+  },
+  mathematics: {
+    file: "mathematics.json",
+    label: "Mathematics",
+  },
+  english: {
+    file: "english.json",
+    label: "English",
+  },
+};
+
 function tokenize(text) {
   return text.trim().split(/\s+/).filter(Boolean);
 }
@@ -117,6 +136,7 @@ export default function SpeedReadingApp() {
   const [timerRunning, setTimerRunning] = useState(false);
   const [timerDone, setTimerDone] = useState(false);
   const [activeSubject, setActiveSubject] = useState("physics");
+  const [subjectLoading, setSubjectLoading] = useState(false);
 
   const timerRef = useRef(null);
   const countdownRef = useRef(null);
@@ -125,17 +145,24 @@ export default function SpeedReadingApp() {
   const currentWord = words[currentIndex] || "Ready";
   const currentWordSetName = wordSets.find((set) => set.id === selectedWordSet)?.name || "Words";
   const progress = words.length ? Math.min(100, Math.round(((currentIndex + 1) / words.length) * 100)) : 0;
+  const activeSubjectLabel = SUBJECTS[activeSubject]?.label || "Subject";
 
   useEffect(() => {
     let cancelled = false;
 
-    async function loadWordSets() {
+    async function loadSubjectWordSets() {
+      const subject = SUBJECTS[activeSubject];
+      if (!subject) return;
+
+      setSubjectLoading(true);
       try {
-        const response = await fetch(`${import.meta.env.BASE_URL}words.json`, {
+        const response = await fetch(`${import.meta.env.BASE_URL}${subject.file}`, {
           cache: "no-store",
         });
 
-        if (!response.ok) return;
+        if (!response.ok) {
+          throw new Error(`Unable to load ${subject.file}`);
+        }
 
         const data = await response.json();
         const parsed = normalizeWordSetData(data);
@@ -146,17 +173,32 @@ export default function SpeedReadingApp() {
           setInputText(parsed[0].words.join(" "));
           setWords(parsed[0].words);
           setCurrentIndex(0);
+          setIsRunning(false);
+          if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
+          }
         }
       } catch {
-        // Keep fallback sets if file is unavailable.
+        if (!cancelled) {
+          setWordSets(FALLBACK_WORD_SETS);
+          setSelectedWordSet(FALLBACK_WORD_SETS[0].id);
+          setInputText(FALLBACK_WORD_SETS[0].words.join(" "));
+          setWords(FALLBACK_WORD_SETS[0].words);
+          setCurrentIndex(0);
+        }
+      } finally {
+        if (!cancelled) {
+          setSubjectLoading(false);
+        }
       }
     }
 
-    loadWordSets();
+    loadSubjectWordSets();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [activeSubject]);
 
   useEffect(() => {
     if (!isRunning || words.length === 0) return;
@@ -335,10 +377,12 @@ export default function SpeedReadingApp() {
           </p>
         </header>
 
-        <SubjectNavigation
-          activeSubject={activeSubject}
-          setActiveSubject={setActiveSubject}
-        />
+        <SubjectNavigation activeSubject={activeSubject} setActiveSubject={setActiveSubject} />
+
+        <div className="rounded-3xl border border-slate-800 bg-slate-900/70 px-4 py-3 text-sm text-slate-300 shadow-xl">
+          Current subject: <span className="font-semibold text-cyan-300">{activeSubjectLabel}</span>
+          {subjectLoading ? <span className="ml-2 text-slate-400">Loading content…</span> : null}
+        </div>
 
         <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
           <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
@@ -394,60 +438,59 @@ export default function SpeedReadingApp() {
               </button>
             </div>
           </section>
-          
-        <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <h2 className="text-lg font-semibold text-slate-100">Highlighted text</h2>
-            <p className="text-sm text-slate-400">Click any word to jump to it</p>
-          </div>
-          <div className="mt-4 max-h-[26rem] overflow-auto rounded-2xl border border-slate-800 bg-slate-950 p-4 leading-8 text-base">
-            {words.length === 0 ? (
-              <p className="text-slate-500">Your pasted text will appear here with the current word highlighted.</p>
-            ) : (
-              <div className="flex flex-wrap gap-x-2 gap-y-3">
-                {words.map((word, index) => {
-                  const active = index === currentIndex;
-                  const done = index < currentIndex;
-                  return (
-                    <button
-                      key={`${word}-${index}`}
-                      onClick={() => jumpToWord(index)}
-                      className={`rounded-lg px-1.5 py-0.5 transition focus:outline-none focus:ring-2 focus:ring-cyan-400 ${
-                        active
-                          ? "bg-cyan-400 text-slate-950 font-bold shadow-lg"
-                          : done
-                          ? "text-slate-400 hover:bg-slate-800"
-                          : "text-slate-200 hover:bg-slate-800"
-                      }`}
-                      title="Jump to this word"
-                    >
-                      {word}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </section>
 
-<section className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
-              <p className="text-sm font-medium text-slate-300">Current word set</p>
-              <div className="mt-4 flex min-h-44 items-center justify-center rounded-3xl border border-slate-800 bg-slate-950 p-6 text-center">
-                <div className="space-y-4">
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="rounded-full border border-slate-700 bg-slate-900 px-6 py-3 text-sm text-slate-300">
-                      {currentWordSetName}
-                    </div>
-                  </div>
-                  <p className="text-4xl md:text-6xl font-bold tracking-wide text-cyan-300">
-                    {currentWord}
-                  </p>
-                  <p className="mt-3 text-sm text-slate-400">
-                    Word {words.length === 0 ? 0 : currentIndex + 1} of {words.length || 0}
-                  </p>
+          <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <h2 className="text-lg font-semibold text-slate-100">Highlighted text</h2>
+              <p className="text-sm text-slate-400">Click any word to jump to it</p>
+            </div>
+            <div className="mt-4 max-h-[26rem] overflow-auto rounded-2xl border border-slate-800 bg-slate-950 p-4 leading-8 text-base">
+              {words.length === 0 ? (
+                <p className="text-slate-500">Your pasted text will appear here with the current word highlighted.</p>
+              ) : (
+                <div className="flex flex-wrap gap-x-2 gap-y-3">
+                  {words.map((word, index) => {
+                    const active = index === currentIndex;
+                    const done = index < currentIndex;
+                    return (
+                      <button
+                        key={`${word}-${index}`}
+                        onClick={() => jumpToWord(index)}
+                        className={`rounded-lg px-1.5 py-0.5 transition focus:outline-none focus:ring-2 focus:ring-cyan-400 ${
+                          active
+                            ? "bg-cyan-400 text-slate-950 font-bold shadow-lg"
+                            : done
+                            ? "text-slate-400 hover:bg-slate-800"
+                            : "text-slate-200 hover:bg-slate-800"
+                        }`}
+                        title="Jump to this word"
+                      >
+                        {word}
+                      </button>
+                    );
+                  })}
                 </div>
+              )}
+            </div>
+          </section>
+
+          <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
+            <p className="text-sm font-medium text-slate-300">Current word set</p>
+            <div className="mt-4 flex min-h-44 items-center justify-center rounded-3xl border border-slate-800 bg-slate-950 p-6 text-center">
+              <div className="space-y-4">
+                <div className="flex flex-col items-center gap-2">
+                  <div className="rounded-full border border-slate-700 bg-slate-900 px-6 py-3 text-sm text-slate-300">
+                    {currentWordSetName}
+                  </div>
+                </div>
+                <p className="text-4xl md:text-6xl font-bold tracking-wide text-cyan-300">{currentWord}</p>
+                <p className="mt-3 text-sm text-slate-400">
+                  Word {words.length === 0 ? 0 : currentIndex + 1} of {words.length || 0}
+                </p>
               </div>
-            </section>
+            </div>
+          </section>
+
           <aside className="space-y-6">
             <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
               <div className="flex items-center justify-between gap-4">
@@ -465,9 +508,7 @@ export default function SpeedReadingApp() {
                 onChange={(e) => setWpm(Number(e.target.value))}
                 className="mt-4 w-full accent-cyan-400"
               />
-              <p className="mt-2 text-sm text-slate-400">
-                Current interval: {intervalMs} ms per word
-              </p>
+              <p className="mt-2 text-sm text-slate-400">Current interval: {intervalMs} ms per word</p>
               <div className="mt-4 h-3 rounded-full bg-slate-800 overflow-hidden">
                 <div
                   className="h-full rounded-full bg-cyan-400 transition-all"
@@ -514,8 +555,6 @@ export default function SpeedReadingApp() {
                 {timerDone ? "Timer finished." : "Set minutes, then start the timer. It will play a sound when time is up."}
               </p>
             </section>
-
-            
 
             <section className="rounded-3xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
               <p className="text-sm font-medium text-slate-300">Status</p>
