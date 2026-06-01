@@ -127,7 +127,10 @@ export default function SpeedReadingApp() {
     "Press Listen, say the current word, and your score will update."
   );
   const [score, setScore] = useState({ correct: 0, attempts: 0 });
+  const [selectedWordIndex, setSelectedWordIndex] = useState(-1);
 
+  const previewScrollRef = useRef(null);
+  const previewItemRefs = useRef([]);
   const timerRef = useRef(null);
   const countdownRef = useRef(null);
   const speechRecognizerRef = useRef(null);
@@ -162,6 +165,7 @@ export default function SpeedReadingApp() {
           setInputText(parsed[0].words.join(" "));
           setWords(parsed[0].words);
           setCurrentIndex(0);
+          setSelectedWordIndex(0);
           setIsRunning(false);
           if (timerRef.current) {
             clearInterval(timerRef.current);
@@ -175,6 +179,7 @@ export default function SpeedReadingApp() {
           setInputText(FALLBACK_WORD_SETS[0].words.join(" "));
           setWords(FALLBACK_WORD_SETS[0].words);
           setCurrentIndex(0);
+          setSelectedWordIndex(0);
         }
       } finally {
         if (!cancelled) setSubjectLoading(false);
@@ -270,6 +275,28 @@ export default function SpeedReadingApp() {
     currentIndexRef.current = currentIndex;
   }, [currentIndex]);
 
+  useEffect(() => {
+    if (currentIndex >= 0 && currentIndex < words.length) {
+      setSelectedWordIndex(currentIndex);
+    }
+  }, [currentIndex, words.length]);
+
+  useEffect(() => {
+    const activePreviewItem = previewItemRefs.current[selectedWordIndex];
+    if (activePreviewItem) {
+      activePreviewItem.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+    }
+
+    const previewContainer = previewScrollRef.current;
+    if (previewContainer && activePreviewItem) {
+      const containerRect = previewContainer.getBoundingClientRect();
+      const itemRect = activePreviewItem.getBoundingClientRect();
+      if (itemRect.top < containerRect.top || itemRect.bottom > containerRect.bottom) {
+        activePreviewItem.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+      }
+    }
+  }, [selectedWordIndex]);
+
   const stopReadingInterval = () => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -289,6 +316,19 @@ export default function SpeedReadingApp() {
     setPronunciationFeedback("Press Listen, say the current word, and your score will update.");
   };
 
+  const speakWord = (word) => {
+    if (typeof window === "undefined" || !window.speechSynthesis || !word) return;
+
+    const synth = window.speechSynthesis;
+    synth.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(word.replace(/[^\w\s'-]/g, ""));
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    utterance.lang = "en-US";
+    synth.speak(utterance);
+  };
+
   const prepareWordsFromInput = () => {
     if (words.length > 0) return words;
     const parsedWords = tokenize(inputText);
@@ -296,6 +336,7 @@ export default function SpeedReadingApp() {
     wordsRef.current = parsedWords;
     setCurrentIndex(0);
     currentIndexRef.current = 0;
+    setSelectedWordIndex(0);
     return parsedWords;
   };
 
@@ -317,6 +358,7 @@ export default function SpeedReadingApp() {
     setInputText("");
     setWords([]);
     setCurrentIndex(0);
+    setSelectedWordIndex(-1);
     stopReadingInterval();
     stopListening();
     resetPracticeScore();
@@ -332,6 +374,7 @@ export default function SpeedReadingApp() {
     setInputText(selected.words.join(" "));
     setWords(selected.words);
     setCurrentIndex(0);
+    setSelectedWordIndex(0);
     setIsRunning(false);
     stopReadingInterval();
     stopListening();
@@ -340,6 +383,7 @@ export default function SpeedReadingApp() {
 
   const jumpToWord = (index) => {
     setCurrentIndex(index);
+    setSelectedWordIndex(index);
     setIsRunning(false);
     stopReadingInterval();
     stopListening();
@@ -499,6 +543,43 @@ export default function SpeedReadingApp() {
                   ? `Loaded ${words.length} words. The panel is highlighted while content is present.`
                   : "Paste or load text to highlight this panel."}
               </p>
+
+              <div
+                ref={previewScrollRef}
+                className="mt-4 max-h-44 overflow-auto rounded-2xl border border-slate-800 bg-slate-950 p-3"
+              >
+                <div className="flex flex-wrap gap-2">
+                  {words.length > 0 ? (
+                    words.map((word, index) => {
+                      const isSelected = index === selectedWordIndex;
+                      return (
+                        <button
+                          key={`preview-${word}-${index}`}
+                          ref={(el) => {
+                            previewItemRefs.current[index] = el;
+                          }}
+                          type="button"
+                          onClick={() => {
+                            setSelectedWordIndex(index);
+                            jumpToWord(index);
+                            speakWord(word);
+                          }}
+                          className={`rounded-full px-3 py-1 text-sm transition ${
+                            isSelected
+                              ? "bg-cyan-300 text-slate-950 font-semibold ring-2 ring-cyan-200"
+                              : "bg-slate-800 text-slate-200 hover:bg-slate-700"
+                          }`}
+                          title="Tap to hear pronunciation"
+                        >
+                          {word}
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <p className="text-xs text-slate-500">Word chips will appear here after text is loaded.</p>
+                  )}
+                </div>
+              </div>
             </div>
 
             <div className="mt-5 flex flex-wrap gap-3">
