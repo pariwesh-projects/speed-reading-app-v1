@@ -1,0 +1,5 @@
+{
+  "beginner": ["number", "angle", "line", "point", "circle", "square", "triangle", "ratio", "fraction", "graph"],
+  "intermediate": ["equation", "algebra", "geometry", "function", "matrix", "vector", "probability", "statistics", "integral", "derivative"],
+  "advanced": ["calculus", "trigonometry", "polynomial", "logarithm", "sequence", "continuity", "series", "coordinate", "transform", "analysis"]
+}
