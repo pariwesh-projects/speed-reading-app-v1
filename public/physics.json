@@ -1,0 +1,5 @@
+{
+  "beginner": ["force", "motion", "energy", "mass", "speed", "light", "wave", "earth", "atom", "vector"],
+  "intermediate": ["velocity", "acceleration", "momentum", "friction", "gravity", "pressure", "current", "voltage", "work", "power"],
+  "advanced": ["kinematics", "thermodynamics", "electromagnetism", "interference", "refraction", "oscillation", "equilibrium", "relativity", "momentum", "dynamics"]
+}
