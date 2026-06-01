@@ -1,5 +1,8 @@
 # Speed Reading App
 
+staging: https://pariwesh-projects.github.io/speed-reading-app-preview/
+prod: https://pariwesh-projects.github.io/speed-reading-app-v1/
+
 A small React demo for speed reading.
 
 ## Features
