@@ -129,8 +129,6 @@ export default function SpeedReadingApp() {
   const [score, setScore] = useState({ correct: 0, attempts: 0 });
   const [selectedWordIndex, setSelectedWordIndex] = useState(-1);
 
-  const previewScrollRef = useRef(null);
-  const previewItemRefs = useRef([]);
   const timerRef = useRef(null);
   const countdownRef = useRef(null);
   const speechRecognizerRef = useRef(null);
@@ -278,24 +276,10 @@ export default function SpeedReadingApp() {
   useEffect(() => {
     if (currentIndex >= 0 && currentIndex < words.length) {
       setSelectedWordIndex(currentIndex);
+    } else if (words.length === 0) {
+      setSelectedWordIndex(-1);
     }
   }, [currentIndex, words.length]);
-
-  useEffect(() => {
-    const activePreviewItem = previewItemRefs.current[selectedWordIndex];
-    if (activePreviewItem) {
-      activePreviewItem.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
-    }
-
-    const previewContainer = previewScrollRef.current;
-    if (previewContainer && activePreviewItem) {
-      const containerRect = previewContainer.getBoundingClientRect();
-      const itemRect = activePreviewItem.getBoundingClientRect();
-      if (itemRect.top < containerRect.top || itemRect.bottom > containerRect.bottom) {
-        activePreviewItem.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
-      }
-    }
-  }, [selectedWordIndex]);
 
   const stopReadingInterval = () => {
     if (timerRef.current) {
@@ -329,6 +313,15 @@ export default function SpeedReadingApp() {
     synth.speak(utterance);
   };
 
+  const syncWordsToInput = (text) => {
+    const parsedWords = tokenize(text);
+    setWords(parsedWords);
+    wordsRef.current = parsedWords;
+    setCurrentIndex(0);
+    currentIndexRef.current = 0;
+    setSelectedWordIndex(parsedWords.length > 0 ? 0 : -1);
+  };
+
   const prepareWordsFromInput = () => {
     if (words.length > 0) return words;
     const parsedWords = tokenize(inputText);
@@ -336,7 +329,7 @@ export default function SpeedReadingApp() {
     wordsRef.current = parsedWords;
     setCurrentIndex(0);
     currentIndexRef.current = 0;
-    setSelectedWordIndex(0);
+    setSelectedWordIndex(-1);
     return parsedWords;
   };
 
@@ -346,9 +339,21 @@ export default function SpeedReadingApp() {
       stopReadingInterval();
       return;
     }
-    const parsedWords = prepareWordsFromInput();
+
+    const parsedWords = tokenize(inputText);
     if (parsedWords.length === 0) return;
-    if (currentIndex >= parsedWords.length) setCurrentIndex(0);
+
+    setWords(parsedWords);
+    wordsRef.current = parsedWords;
+
+    if (currentIndex >= parsedWords.length) {
+      setCurrentIndex(0);
+      currentIndexRef.current = 0;
+      setSelectedWordIndex(0);
+    } else {
+      setSelectedWordIndex(currentIndex);
+    }
+
     setIsRunning(true);
   };
 
@@ -534,7 +539,13 @@ export default function SpeedReadingApp() {
             <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4 transition focus-within:border-cyan-400 focus-within:ring-2 focus-within:ring-cyan-400/30">
               <textarea
                 value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
+                onChange={(e) => {
+                  const nextText = e.target.value;
+                  setInputText(nextText);
+                  if (!isRunning) {
+                    syncWordsToInput(nextText);
+                  }
+                }}
                 placeholder="Paste your article, notes, or paragraph here..."
                 className="h-72 w-full rounded-2xl border-0 bg-transparent p-0 text-base leading-7 text-slate-100 outline-none placeholder:text-slate-500"
               />
@@ -544,10 +555,7 @@ export default function SpeedReadingApp() {
                   : "Paste or load text to highlight this panel."}
               </p>
 
-              <div
-                ref={previewScrollRef}
-                className="mt-4 max-h-44 overflow-auto rounded-2xl border border-slate-800 bg-slate-950 p-3"
-              >
+              <div className="mt-4 max-h-44 overflow-auto rounded-2xl border border-slate-800 bg-slate-950 p-3">
                 <div className="flex flex-wrap gap-2">
                   {words.length > 0 ? (
                     words.map((word, index) => {
