@@ -104,9 +104,9 @@ export default function SpeedReadingApp() {
   const [inputText, setInputText] = useState(
     "Paste text here or choose a list from the dropdown. The app will show one word at a time at the speed you choose."
   );
-  const [wpm, setWpm] = useState(120);
+  const [wpm, setWpm] = useState(20);
   const [isRunning, setIsRunning] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [words, setWords] = useState([]);
   const [wordSets, setWordSets] = useState(FALLBACK_WORD_SETS);
