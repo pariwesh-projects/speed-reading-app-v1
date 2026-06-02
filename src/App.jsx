@@ -38,6 +38,7 @@ function tokenize(text) {
 
 function normalizeWordSetData(raw) {
   if (!raw || typeof raw !== "object") return [];
+
   if (Array.isArray(raw)) {
     return raw
       .map((item, index) => {
@@ -57,6 +58,7 @@ function normalizeWordSetData(raw) {
       .filter(Boolean)
       .filter((set) => set.words.length > 0);
   }
+
   return Object.entries(raw)
     .map(([key, value]) => ({
       id: key,
@@ -77,6 +79,7 @@ function playEndSound() {
   if (typeof window === "undefined") return;
   const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
   if (!AudioContextCtor) return;
+
   try {
     const ctx = new AudioContextCtor();
     const now = ctx.currentTime;
@@ -93,6 +96,7 @@ function playEndSound() {
       oscillator.start(now + offset);
       oscillator.stop(now + offset + 0.2);
     };
+
     beep(0, 880);
     beep(0.22, 660);
     setTimeout(() => {
@@ -195,6 +199,7 @@ export default function SpeedReadingApp() {
 
   useEffect(() => {
     if (!isRunning || words.length === 0) return;
+
     timerRef.current = setInterval(() => {
       setCurrentIndex((prev) => {
         if (prev >= words.length - 1) {
@@ -206,6 +211,7 @@ export default function SpeedReadingApp() {
         return prev + 1;
       });
     }, intervalMs);
+
     return () => {
       if (timerRef.current) {
         clearInterval(timerRef.current);
@@ -364,7 +370,6 @@ export default function SpeedReadingApp() {
     stopReadingInterval();
     setCurrentIndex(0);
     currentIndexRef.current = 0;
-    setIsSpeaking(false);
     stopListening();
     if (typeof window !== "undefined" && window.speechSynthesis) {
       window.speechSynthesis.cancel();
@@ -465,7 +470,19 @@ export default function SpeedReadingApp() {
         setScore((prev) => ({ correct: prev.correct + (matched ? 1 : 0), attempts: prev.attempts + 1 }));
 
         if (matched) {
-          setPronunciationFeedback(`Correct: ${targetWord}`);
+          const currentWordIndex = currentIndexRef.current;
+          const isLastWord = currentWordIndex >= activeWordsNow.length - 1;
+
+          setPronunciationFeedback(isLastWord ? `Completed: ${targetWord}` : `Correct: ${targetWord}`);
+
+          if (isLastWord) {
+            setIsListening(false);
+            setIsSpeaking(false);
+            speechRecognizerRef.current?.stop();
+            speechRecognizerRef.current = null;
+            return;
+          }
+
           setCurrentIndex((prev) => {
             const next = prev < activeWordsNow.length - 1 ? prev + 1 : prev;
             currentIndexRef.current = next;
